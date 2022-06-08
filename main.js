@@ -64,8 +64,8 @@ class Enemy {
 
 		this.stats = {
 			speed:1,
-			maxHealth:10,
-			health:10,
+			maxHealth:9999,
+			health:9999,
 			money:-1
 		}
 		
@@ -78,7 +78,13 @@ class Enemy {
 			healthBarHeight:6
 		};
 
+		this.specialUpdates = [];
+
 		enemies.push(this);
+	}
+
+	getCenter() {
+		return new Vector2(this.pos.x + this.size.x / 2,this.pos.y + this.size.y / 2);
 	}
 
 	render() {
@@ -97,6 +103,20 @@ class Enemy {
 
 	update() {
 		this.pos.x += this.stats.speed;
+
+
+		// Keep self in bounds
+		if (this.pos.y < 0) {
+			this.pos.y = 0;
+		};
+		if (this.pos.y > c.height - this.size.y) {
+			this.pos.y = c.height - this.size.y;
+		};
+
+
+		this.specialUpdates.forEach(f=>{
+			f();
+		});
 	}
 }
 
@@ -114,6 +134,23 @@ class Agent extends Enemy {
 			'agent0',
 			'agent1'
 		]
+	}
+}
+
+class AgileAgent extends Agent {
+	constructor() {
+		super();
+		this.stats.speed  = 1.4;
+		this.specialUpdates.push(()=>{
+			// Run from crosshair
+			if (Math.sqrt((this.getCenter().x-player.cursorPos.x) ** 2 + (this.getCenter().y-player.cursorPos.y) ** 2) < 50) {
+				if (this.getCenter().y > player.cursorPos.y) {
+					this.pos.y += this.stats.speed;
+				} else {
+					this.pos.y -= this.stats.speed;
+				};
+			};
+		});
 	}
 }
 
@@ -194,7 +231,7 @@ document.addEventListener('keydown',e=>{
 
 let waves = [
 	new Wave({
-		'Enemy':99
+		'Enemy':250
 	},{
 		interval:1
 	}),
@@ -210,10 +247,11 @@ let waves = [
 
 
 	new Wave({
-		'Agent':8
+		'Agent':8,
+		'AgileAgent':6
 	},
 	{
-		interval:40
+		interval:5
 	})
 ];
 
@@ -370,7 +408,10 @@ function update() {
 	};
 
 
-
+	// Fill bullets automatically between waves
+	if (player.gamestate == 'betweenWaves') {
+		player.bullets = player.maxBullets;
+	};
 
 
 	updateCounter++;
