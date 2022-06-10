@@ -98,6 +98,8 @@ let images = {
 
 	'camo0':new Img('camo/walk0.png'),
 	'camo1':new Img('camo/walk1.png'),
+
+	'camoTank0':new Img('camoTank/walk0.png'),
 	
 	'bg':new Img('bg.png'),
 	'crosshair':new Img('crosshair.png'),
@@ -490,9 +492,31 @@ class Microbot extends Enemy {
 class Camo extends Agent {
 	constructor() {
 		super();
-		this.stats.untargetable = true;
+		this.stats = {
+			speed:1.5,
+			maxHealth:18,
+			health:18,
+			money:10,
+			untargetable:true
+		}
 		
 		this.renderSettings.frames = ['camo0','camo1']
+	}
+}
+
+class CamoTank extends Tank {
+	constructor() {
+		super();
+		this.stats = {
+			speed:.5,
+			maxHealth:125,
+			health:125,
+			money:75,
+			untargetable:true
+		};
+		this.renderSettings.frames = [
+			'camoTank0'
+		]
 	}
 }
 
@@ -586,6 +610,33 @@ let waves = [
 		'Tank':3,
 		'AgileAgent':5,
 		'Agent':14
+	},{
+		interval:8
+	}),
+
+
+
+
+	new Wave({
+		'Microbot':20,
+		'Tank':4,
+		'AgileAgent':10,
+		'Agent':5
+	},{
+		interval:8
+	}),
+
+
+
+
+
+	new Wave({
+		'Microbot':22,
+		'Tank':3,
+		'AgileAgent':6,
+		'Agent':2,
+		'Camo':10,
+		'CamoTank':2
 	},{
 		interval:8
 	})
