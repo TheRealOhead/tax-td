@@ -251,7 +251,7 @@ class Explosion extends Tower {
 		enemies.forEach(e=>{
 			let dist = Math.sqrt((e.getCenter().x-this.getCenter().x) ** 2 + (e.getCenter().y-this.getCenter().y) ** 2)
 			if (dist < this.power) {
-				e.stats.health -= 40;
+				e.damage(40,'explosive');
 			}
 		});
 
@@ -273,7 +273,7 @@ class AOE extends Tower {
 				if (dist < 160) {
 					doTheSound = true;
 					new Line(new Vector2(this.pos.x + 8,this.pos.y + 6),e.getCenter(),'#00fffb'); // Draw line from orb to enemy
-					e.stats.health -= .05;
+					e.damage(.05,'magic');
 				};
 			});
 			if (doTheSound) sounds['aoe'].play();
@@ -315,7 +315,7 @@ class Bunker extends Tower {
 
 			if (closestEnemyDist < 360 && this.cooldown > 40 && !closestEnemy.stats.untargetable) {
 				sounds['pistolShot'].play();
-				closestEnemy.stats.health -= 20;
+				closestEnemy.damage(20,'physical');
 				new Line(this.getCenter(),closestEnemy.getCenter(),'#b05f00');
 				this.cooldown = 0;
 			};
@@ -351,16 +351,26 @@ class Enemy {
 
 	}
 
+	damage(amount, type) {
+		if (Object.keys(this.stats.resistances).includes(type)) {
+			amount *= this.stats.resistances[type];
+			console.log('Resisted damage down to ' + this.stats.resistances[type] + '%!');
+		} else {
+			console.log('Didn\'t resist shit!');
+		};
+		this.stats.health -= amount;
+	}
+
 	constructor() {
 		this.pos = new Vector2(0,Math.random() * c.height * .95);
 		this.size = new Vector2(16,16);
-
 
 		this.stats = {
 			speed:1,
 			maxHealth:9999,
 			health:9999,
-			money:-1
+			money:-1,
+			resistances:{}
 		}
 		
 
@@ -421,12 +431,12 @@ class Enemy {
 class Agent extends Enemy {
 	constructor() {
 		super();
-		this.stats = {
+		Object.assign(this.stats,{
 			speed:1,
 			maxHealth:10,
 			health:10,
 			money:5
-		}
+		})
 		this.size = new Vector2(16,16);
 		this.renderSettings.frames = [
 			'agent0',
@@ -443,9 +453,9 @@ class AgileAgent extends Agent {
 			// Run from crosshair
 			if (Math.sqrt((this.getCenter().x-player.cursorPos.x) ** 2 + (this.getCenter().y-player.cursorPos.y) ** 2) < 50) {
 				if (this.getCenter().y > player.cursorPos.y) {
-					this.pos.y += this.stats.speed;
+					this.pos.y += this.stats.speed * .5;
 				} else {
-					this.pos.y -= this.stats.speed;
+					this.pos.y -= this.stats.speed * .5;
 				};
 			};
 		});
@@ -459,12 +469,14 @@ class Tank extends Enemy {
 
 	constructor() {
 		super();
-		this.stats = {
+		Object.assign(this.stats,{
 			speed:.33,
 			maxHealth:100,
 			health:100,
 			money:40
-		}
+		})
+		this.stats.resistances['physical'] = .75;
+		this.stats.resistances['explosive'] = .50;
 		this.size = new Vector2(64,32);
 		this.renderSettings.frames = [
 			'tank0'
@@ -475,12 +487,12 @@ class Tank extends Enemy {
 class Microbot extends Enemy {
 	constructor() {
 		super();
-		this.stats = {
+		Object.assign(this.stats,{
 			speed:2,
 			maxHealth:5,
 			health:5,
 			money:1
-		}
+		});
 		this.size = new Vector2(8,8);
 		this.renderSettings.frames = [
 			'bot0',
@@ -492,13 +504,13 @@ class Microbot extends Enemy {
 class Camo extends Agent {
 	constructor() {
 		super();
-		this.stats = {
+		Object.assign(this.stats,{
 			speed:1.5,
 			maxHealth:18,
 			health:18,
 			money:10,
 			untargetable:true
-		}
+		});
 		
 		this.renderSettings.frames = ['camo0','camo1']
 	}
@@ -507,13 +519,13 @@ class Camo extends Agent {
 class CamoTank extends Tank {
 	constructor() {
 		super();
-		this.stats = {
+		Object.assign(this.stats,{
 			speed:.5,
 			maxHealth:125,
 			health:125,
 			money:75,
 			untargetable:true
-		};
+		});
 		this.renderSettings.frames = [
 			'camoTank0'
 		]
@@ -566,15 +578,12 @@ let waves = [
 		interval:1
 	}),
 
-
 	new Wave({
 		'Agent':2
 	},
 	{
 		interval:20
 	}),
-
-
 
 	new Wave({
 		'Agent':8,
@@ -583,7 +592,6 @@ let waves = [
 	{
 		interval:5
 	}),
-
 
 	new Wave({
 		'Microbot':4,
@@ -594,7 +602,6 @@ let waves = [
 		interval:8
 	}),
 
-
 	new Wave({
 		'Microbot':6,
 		'Tank':3,
@@ -603,7 +610,6 @@ let waves = [
 	},{
 		interval:8
 	}),
-
 
 	new Wave({
 		'Microbot':6,
@@ -614,9 +620,6 @@ let waves = [
 		interval:8
 	}),
 
-
-
-
 	new Wave({
 		'Microbot':20,
 		'Tank':4,
@@ -625,10 +628,6 @@ let waves = [
 	},{
 		interval:8
 	}),
-
-
-
-
 
 	new Wave({
 		'Microbot':22,
@@ -639,6 +638,12 @@ let waves = [
 		'CamoTank':2
 	},{
 		interval:8
+	}),
+
+	new Wave({
+		'Tank':20
+	},{
+		interval:15
 	})
 ];
 
@@ -708,7 +713,7 @@ c.addEventListener('mousedown',e=>{
 			// Damage enemies under the crosshair
 			enemies.forEach(enemy=>{
 				if (isPointInBox(player.cursorPos,enemy.pos,enemy.size)) {
-					enemy.stats.health -= player.damage;
+					enemy.damage(player.damage,'physical');
 				};
 
 			});
