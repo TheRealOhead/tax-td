@@ -1,8 +1,23 @@
 let c = document.getElementById('game');
 let ctx = c.getContext('2d');
 
+
+
+// Disable context menu on the game canvas
+c.oncontextmenu = () => {
+	return false;
+};
+
 c.width = 800;
 c.height = 400;
+
+function isPointInBox(point,boxPos,boxSize) {
+	if (boxPos.x < point.x && boxPos.y < point.y &&
+		boxPos.x + boxSize.x > point.x && boxPos.y + boxSize.y > point.y) {
+		return true;
+	};
+	return false;
+};
 
 class Vector2 {
 	constructor(x,y) {
@@ -25,14 +40,19 @@ class Img {
 	constructor(file) {
 		this.image = new Image();
 		this.image.src = 'img/'+file;
+		this.image.style.imageRendering = 'pixelated';
 	}
 }
 
 let sounds = {
 	'pistolShot':new Sound('shot.wav'),
-	'pistolReload':new Sound('reload.wav')
+	'pistolReload':new Sound('reload.wav'),
+	'explosion':new Sound('explosion.wav'),
+	'minePlace':new Sound('minePlace.wav')
 }
 
+
+// Preloading images to avoid flicker and lag
 let images = {
 	'agent0':new Img('agent/walk0.png'),
 	'agent1':new Img('agent/walk1.png'),
@@ -41,13 +61,170 @@ let images = {
 
 	'bot0':new Img('microbot/walk0.png'),
 	'bot1':new Img('microbot/walk1.png'),
+
+	'mineOff':new Img('mine/off.png'),
+	'mineOn':new Img('mine/on.png'),
+
+	'explosion0':new Img('explosion/0.png'),
+	'explosion1':new Img('explosion/1.png'),
 	
 	'bg':new Img('bg.png'),
 	'crosshair':new Img('crosshair.png'),
 
-	'missing':new Img('missing.png')
+	'missing':new Img('missing.png'),
+
+	getImage(imageName) {
+		if (images.hasOwnProperty(imageName)) {
+			return images[imageName];
+		};
+		console.warn(`Unknown image: "${imageName}"`);
+		return images['missing'];
+	}
 }
 
+  ////////////
+ // TOWERS //
+////////////
+let towers = [];
+class Tower {
+	static renderSettings = {
+		frames:['missing'],
+		timer:0,
+		frame:0,
+		delay:10,
+		healthBarHeight:6
+	};
+
+	static stats = {
+		size:new Vector2(16,16),
+		cost:0
+	}
+
+	constructor() {
+		this.pos = new Vector2(player.cursorPos.x,player.cursorPos.y);
+
+		// A tower marked for death is removed on the next update
+		this.markedForDeath = false;
+
+		this.renderSettings = structuredClone(this.constructor.renderSettings); // Copy render settings from static variable
+		this.size = structuredClone(this.constructor.stats.size); // Copy size from static variable
+
+		this.specialUpdates = [];
+
+		towers.push(this);
+	}
+
+	// Moves the tower so that its center is where its technical position used to be, to make cursor placement mor seamless
+	moveAccordingToSize() {
+		this.pos = new Vector2(this.pos.x-this.size.x/2,this.pos.y-this.size.y/2)
+	}
+
+	// Returns the center of the tower for stuff like distance calculation
+	getCenter() {
+		return new Vector2(this.pos.x + this.size.x / 2,this.pos.y + this.size.y / 2);
+	}
+
+	render() {
+		// Handle animations
+		this.renderSettings.timer = (this.renderSettings.timer + 1) % this.renderSettings.delay;
+		if (!this.renderSettings.timer)
+			this.renderSettings.frame = (this.renderSettings.frame + 1) % this.renderSettings.frames.length;
+
+		// Draw current frame
+		ctx.drawImage(images.getImage(this.renderSettings.frames[this.renderSettings.frame]).image, this.pos.x, this.pos.y, this.size.x, this.size.y);
+	}
+
+	update() {
+		this.specialUpdates.forEach(f=>{
+			f();
+		});
+	}
+}
+
+class LandMine extends Tower {
+	static renderSettings = {
+		frames:['mineOff','mineOff','mineOff','mineOff','mineOff','mineOn','mineOff','mineOn'],
+		timer:0,
+		frame:0,
+		delay:5
+	}
+
+	static stats = {
+		size:new Vector2(8,8),
+		cost:25
+	}
+
+	constructor() {
+		super();
+
+		this.moveAccordingToSize();
+
+		sounds['minePlace'].play();
+
+
+		// Explosion code
+		this.specialUpdates.push(()=>{
+			let explode = false;
+			enemies.forEach(e=>{
+				if (isPointInBox(this.getCenter(),e.pos,e.size)) {
+					explode = true;
+				};
+			});
+			if (explode) {
+				new Explosion(this.pos);
+				this.markedForDeath = true;
+			};
+		});
+
+	}
+}
+
+class Explosion extends Tower {
+
+	static renderSettings = {
+		frames:['explosion0','explosion1'],
+		timer:0,
+		frame:0,
+		delay:5
+	};
+
+	static stats = {
+		size:new Vector2(64,64)
+	}
+
+	constructor(pos,power) {
+		super();
+
+		// Set position to custom position
+		pos ? this.pos = pos : '';
+		if (power != undefined) {
+			this.power = power;
+		} else {
+			this.power = 40;
+		};
+
+		this.moveAccordingToSize();
+
+		this.despawnTimer = 8;
+
+		this.specialUpdates.push(()=>{
+			this.despawnTimer--;
+			if (this.despawnTimer <= 0) {
+				this.markedForDeath = true;
+			};
+		});
+
+		// Damage enemies
+		enemies.forEach(e=>{
+			let dist = Math.sqrt((e.getCenter().x-this.getCenter().x) ** 2 + (e.getCenter().y-this.getCenter().y) ** 2)
+			if (dist < this.power) {
+				e.stats.health -= 40;
+			}
+		});
+
+		sounds['explosion'].play();
+	}
+}
 
 
 
@@ -57,6 +234,10 @@ let images = {
 /////////////
 let enemies = [];
 class Enemy {
+	ondie() {
+
+	}
+
 	constructor() {
 		this.pos = new Vector2(0,Math.random() * c.height * .95);
 		this.size = new Vector2(16,16);
@@ -117,6 +298,10 @@ class Enemy {
 		this.specialUpdates.forEach(f=>{
 			f();
 		});
+
+		if (this.stats.health <= 0) {
+			this.ondie();
+		};
 	}
 }
 
@@ -154,12 +339,15 @@ class AgileAgent extends Agent {
 	}
 }
 
-
 class Tank extends Enemy {
+	ondie() {
+		new Explosion(this.getCenter());
+	}
+
 	constructor() {
 		super();
 		this.stats = {
-			speed:.15,
+			speed:.33,
 			maxHealth:100,
 			health:100,
 			money:40
@@ -170,8 +358,6 @@ class Tank extends Enemy {
 		]
 	}
 }
-
-
 
 class Microbot extends Enemy {
 	constructor() {
@@ -252,6 +438,16 @@ let waves = [
 	},
 	{
 		interval:5
+	}),
+
+
+	new Wave({
+		'Microbot':4,
+		'Tank':1,
+		'AgileAgent':2,
+		'Agent':4
+	},{
+		interval:8
 	})
 ];
 
@@ -275,7 +471,13 @@ let player = {
 	reloadCooldown:18,
 	cursorPos:new Vector2(0,0),
 	currentWave:0,
-	money:100,
+	money:0,
+	buyableTowers:[
+		'LandMine',
+		'Explosion',
+		'Tower'
+	],
+	selectedTower:0,
 
 
 	gamestate:'betweenWaves'
@@ -285,25 +487,47 @@ let player = {
 		gameOver
 	*/
 }
+
+// Switch selected tower
+document.addEventListener('keydown',e=>{
+	console.log(e.key);
+});
+
+// Mouse actions
 c.addEventListener('mousedown',e=>{
 	// Shoot
-	if (player.shotTimer == 0 && player.reloadTimer == 0 && player.bullets > 0) {
-		sounds['pistolShot'].play();
-		player.shotTimer = player.shotCooldown;
-		player.bullets--;
+	if (e.button == 0) {
+		if (player.shotTimer == 0 && player.reloadTimer == 0 && player.bullets > 0) {
+			sounds['pistolShot'].play();
+			player.shotTimer = player.shotCooldown;
+			player.bullets--;
 
-		// Damage enemies under the crosshair
-		enemies.forEach(enemy=>{
-			if (enemy.pos.x < player.cursorPos.x && enemy.pos.y < player.cursorPos.y &&
-				enemy.pos.x + enemy.size.x > player.cursorPos.x && enemy.pos.y + enemy.size.y > player.cursorPos.y) {
-				enemy.stats.health -= player.damage;
+			// Damage enemies under the crosshair
+			enemies.forEach(enemy=>{
+				if (isPointInBox(player.cursorPos,enemy.pos,enemy.size)) {
+					enemy.stats.health -= player.damage;
+				};
+
+			});
+
+			// Reload
+			if (player.bullets == 0) {
+				player.reloadTimer = player.reloadCooldown;
+				sounds['pistolReload'].play();
 			};
-		});
+		};
+	};
 
-		// Reload
-		if (player.bullets == 0) {
-			player.reloadTimer = player.reloadCooldown;
-			sounds['pistolReload'].play();
+
+	// Place tower
+	if (e.button == 2) {
+		let towerClass = eval(player.buyableTowers[player.selectedTower]);
+
+		if (towerClass.stats.cost <= player.money) { // Can afford
+			player.money -= towerClass.stats.cost; // Charge player
+			new towerClass();
+		} else { // Can't afford
+			console.log('Can\'t afford!');
 		};
 	};
 });
@@ -322,6 +546,11 @@ function render() {
 
 	// Render all enemies
 	enemies.forEach(e=>{
+		e.render();
+	});
+
+	// Render all towers
+	towers.forEach(e=>{
 		e.render();
 	});
 
@@ -350,6 +579,18 @@ function render() {
 	};
 
 
+
+	// Draw selected tower in the corner
+	let towerClass = eval(player.buyableTowers[player.selectedTower]);
+	let bigImage = images.getImage(towerClass.renderSettings.frames[0]).image;
+	bigImage.width = towerClass.stats.style * 2;
+	bigImage.height = towerClass.stats.style * 2;
+	ctx.webkitImageSmoothingEnabled = false;
+	ctx.mozImageSmoothingEnabled = false;
+	ctx.imageSmoothingEnabled = false;
+	ctx.drawImage(bigImage,c.width - towerClass.stats.size.x * 2 - 10,10,towerClass.stats.size.x * 2, towerClass.stats.size.y * 2);
+
+
 	// Draw crosshair
 	ctx.drawImage(images['crosshair'].image,player.cursorPos.x - images['crosshair'].image.width / 2,player.cursorPos.y - images['crosshair'].image.height / 2);
 
@@ -368,12 +609,14 @@ render();
 /////////////
 let updateCounter = 0;
 function update() {
-	// Update all enemies
-	enemies.forEach(e=>{
+	
+
+	// Update all towers
+	towers.forEach(e=>{
 		e.update();
 	});
 
-	// Step cooldown timer
+	// Step gun cooldown timer
 	if (player.shotTimer > 0)
 		player.shotTimer--;
 
@@ -385,7 +628,13 @@ function update() {
 		};
 	}
 
-	// Kill enemmies that have health zero or lower
+	// Update all enemies
+	enemies.forEach(e=>{
+		e.update();
+	});
+
+	// Kill enemies that have health zero or lower
+	// This is important to do BEFORE the enemy updates because if an enemy is about to die, it needs a chance to run its ondie function
 	for (let i = enemies.length - 1; i >= 0; i--) {
 		let e = enemies[i];
 		if (enemies[i].stats.health <= 0) {
@@ -394,6 +643,14 @@ function update() {
 		};
 	};
 
+
+	// Get rid of towers marked for death
+	for (let i = towers.length - 1; i >= 0; i--) {
+		let e = towers[i];
+		if (towers[i].markedForDeath) {
+			towers.splice(i,1);
+		};
+	};
 
 	// Spawn enemies from current wave
 	let wave = waves[player.currentWave];
