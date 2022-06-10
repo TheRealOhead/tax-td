@@ -71,7 +71,8 @@ let sounds = {
 	'explosion':new Sound('explosion.wav'),
 	'minePlace':new Sound('minePlace.wav'),
 	'deny':new Sound('deny.wav'),
-	'aoe':new Sound('aoe.wav')
+	'aoe':new Sound('aoe.wav'),
+	'bunkerReload':new Sound('bunkerReload.wav')
 }
 
 
@@ -92,6 +93,11 @@ let images = {
 	'explosion1':new Img('explosion/1.png'),
 
 	'aoe0':new Img('aoe/0.png'),
+
+	'bunker0':new Img('bunker/0.png'),
+
+	'camo0':new Img('camo/walk0.png'),
+	'camo1':new Img('camo/walk1.png'),
 	
 	'bg':new Img('bg.png'),
 	'crosshair':new Img('crosshair.png'),
@@ -285,6 +291,52 @@ class AOE extends Tower {
 	}
 }
 
+class Bunker extends Tower {
+	constructor() {
+		super();
+		this.moveAccordingToSize();
+
+		this.cooldown = 0;
+
+		this.specialUpdates.push(()=>{
+			
+			let closestEnemy = null;
+			let closestEnemyDist = Infinity;
+
+			enemies.forEach(e=>{
+				let dist = Math.sqrt((e.getCenter().x-this.getCenter().x) ** 2 + (e.getCenter().y-this.getCenter().y) ** 2);
+				if (dist < closestEnemyDist) {
+					closestEnemy = e;
+					closestEnemyDist = dist;
+				};	
+			});
+
+			if (closestEnemyDist < 360 && this.cooldown > 40 && !closestEnemy.stats.untargetable) {
+				sounds['pistolShot'].play();
+				closestEnemy.stats.health -= 20;
+				new Line(this.getCenter(),closestEnemy.getCenter(),'#b05f00');
+				this.cooldown = 0;
+			};
+			
+			if (this.cooldown == 5) sounds['bunkerReload'].play();
+			
+			this.cooldown++
+		});
+	}
+
+	static renderSettings = {
+		frames:['bunker0'],
+		timer:0,
+		frame:0,
+		delay:99999 // No real point in putting effort into animating it
+	};
+
+	static stats = {
+		size:new Vector2(32,32),
+		cost:150
+	}
+}
+
 
 
 
@@ -338,7 +390,7 @@ class Enemy {
 
 		// Draw health bar
 		ctx.fillStyle = '#0f0';
-		ctx.fillRect(this.pos.x,this.pos.y + this.size.y,(this.stats.health / this.stats.maxHealth) * this.size.x,this.renderSettings.healthBarHeight);
+		ctx.fillRect(this.pos.x,this.pos.y + this.size.y,Math.max(0,(this.stats.health / this.stats.maxHealth) * this.size.x),this.renderSettings.healthBarHeight);
 	}
 
 	update() {
@@ -435,6 +487,15 @@ class Microbot extends Enemy {
 	}
 }
 
+class Camo extends Agent {
+	constructor() {
+		super();
+		this.stats.untargetable = true;
+		
+		this.renderSettings.frames = ['camo0','camo1']
+	}
+}
+
 
 
   ///////////
@@ -507,6 +568,26 @@ let waves = [
 		'Agent':4
 	},{
 		interval:8
+	}),
+
+
+	new Wave({
+		'Microbot':6,
+		'Tank':3,
+		'AgileAgent':3,
+		'Agent':8
+	},{
+		interval:8
+	}),
+
+
+	new Wave({
+		'Microbot':6,
+		'Tank':3,
+		'AgileAgent':5,
+		'Agent':14
+	},{
+		interval:8
 	})
 ];
 
@@ -534,6 +615,7 @@ let player = {
 	buyableTowers:[
 		'LandMine',
 		'AOE',
+		'Bunker',
 		'Explosion',
 		'Tower'
 	],
@@ -751,3 +833,31 @@ function update() {
 	updateCounter++;
 };
 setInterval(update,50);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function I_Am_A_Dirty_Dirty_Cheater_And_I_Hack_In_All_The_Money() {
+	player.money += 999999;
+};
