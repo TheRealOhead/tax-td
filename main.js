@@ -44,11 +44,34 @@ class Img {
 	}
 }
 
+let linesToDraw = [];
+
+class Line {
+	constructor(p1,p2,color) {
+		this.p1 = p1;
+		this.p2 = p2;
+		this.color = color;
+
+		linesToDraw.push(this);
+	}
+
+	render() {
+		ctx.strokeStyle = this.color;
+
+		ctx.beginPath();
+		ctx.moveTo(this.p1.x,this.p1.y);
+		ctx.lineTo(this.p2.x,this.p2.y);
+		ctx.stroke();
+	}
+}
+
 let sounds = {
 	'pistolShot':new Sound('shot.wav'),
 	'pistolReload':new Sound('reload.wav'),
 	'explosion':new Sound('explosion.wav'),
-	'minePlace':new Sound('minePlace.wav')
+	'minePlace':new Sound('minePlace.wav'),
+	'deny':new Sound('deny.wav'),
+	'aoe':new Sound('aoe.wav')
 }
 
 
@@ -67,6 +90,8 @@ let images = {
 
 	'explosion0':new Img('explosion/0.png'),
 	'explosion1':new Img('explosion/1.png'),
+
+	'aoe0':new Img('aoe/0.png'),
 	
 	'bg':new Img('bg.png'),
 	'crosshair':new Img('crosshair.png'),
@@ -223,6 +248,40 @@ class Explosion extends Tower {
 		});
 
 		sounds['explosion'].play();
+	}
+}
+
+class AOE extends Tower {
+	constructor() {
+		super();
+		this.moveAccordingToSize();
+
+
+		this.specialUpdates.push(()=>{
+			// Damage enemies
+			let doTheSound = false;
+			enemies.forEach(e=>{
+				let dist = Math.sqrt((e.getCenter().x-this.getCenter().x) ** 2 + (e.getCenter().y-this.getCenter().y) ** 2);
+				if (dist < 160) {
+					doTheSound = true;
+					new Line(new Vector2(this.pos.x + 8,this.pos.y + 6),e.getCenter(),'#00fffb'); // Draw line from orb to enemy
+					e.stats.health -= .05;
+				};
+			});
+			if (doTheSound) sounds['aoe'].play();
+		});
+	}
+
+	static renderSettings = {
+		frames:['aoe0'],
+		timer:0,
+		frame:0,
+		delay:99999 // No real point in putting effort into animating it
+	};
+
+	static stats = {
+		size:new Vector2(16,32),
+		cost:80
 	}
 }
 
@@ -474,6 +533,7 @@ let player = {
 	money:0,
 	buyableTowers:[
 		'LandMine',
+		'AOE',
 		'Explosion',
 		'Tower'
 	],
@@ -489,9 +549,19 @@ let player = {
 }
 
 // Switch selected tower
+function changeTower(n) {
+	n += player.buyableTowers.length;
+	player.selectedTower = (player.selectedTower + n) % player.buyableTowers.length;
+};
 document.addEventListener('keydown',e=>{
-	console.log(e.key);
+	if (e.key == 'ArrowLeft') changeTower(1);
+	if (e.key == 'ArrowRight') changeTower(-1);
 });
+document.addEventListener('wheel',e=>{
+	if (e.deltaY > 0) changeTower(1);
+	if (e.deltaY < 0) changeTower(-1);
+})
+
 
 // Mouse actions
 c.addEventListener('mousedown',e=>{
@@ -525,9 +595,9 @@ c.addEventListener('mousedown',e=>{
 
 		if (towerClass.stats.cost <= player.money) { // Can afford
 			player.money -= towerClass.stats.cost; // Charge player
-			new towerClass();
+			new towerClass(); // Make the tower as promised
 		} else { // Can't afford
-			console.log('Can\'t afford!');
+			sounds['deny'].play();
 		};
 	};
 });
@@ -553,6 +623,13 @@ function render() {
 	towers.forEach(e=>{
 		e.render();
 	});
+
+	// Render lines
+	while (linesToDraw.length > 0) {
+		linesToDraw.pop().render();
+	};
+
+
 
 
 
