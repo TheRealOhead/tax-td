@@ -650,6 +650,29 @@ let waves = [
 
 
 
+  /////////////////
+ // PROJECTILES //
+/////////////////
+
+class Projectile extends Tower {
+	constructor() {
+		super();
+	}
+}
+
+class Bomb extends Projectile {
+	constructor() {
+		super();
+
+
+
+		this.moveAccordingToSize();
+	}
+}
+
+
+
+
 
   ////////////
  // PLAYER //
@@ -671,11 +694,29 @@ let player = {
 	buyableTowers:[
 		'LandMine',
 		'AOE',
-		'Bunker',
-		'Explosion',
-		'Tower'
+		'Bunker'
 	],
 	selectedTower:0,
+	tooltip:{
+		text:'Gamer',
+		color:'#f00',
+		timer:0,
+		set(text,color,timer) {
+			this.text = text;
+			this.color = color;
+			this.timer = timer;
+		},
+		draw() {
+			if (this.timer > 0) {
+				this.timer--;
+				ctx.textBaseline = 'hanging';
+				ctx.textAlign = 'left';
+				ctx.fillStyle = this.color;
+				ctx.fillText(this.text,player.cursorPos.x + 5,player.cursorPos.y + 5);
+				ctx.textBaseline = 'alphabetic';
+			};
+		}
+	},
 
 
 	gamestate:'betweenWaves'
@@ -736,6 +777,7 @@ c.addEventListener('mousedown',e=>{
 			new towerClass(); // Make the tower as promised
 		} else { // Can't afford
 			sounds['deny'].play();
+			player.tooltip.set('Too expensive!','#f55',50);
 		};
 	};
 });
@@ -808,6 +850,9 @@ function render() {
 
 	// Draw crosshair
 	ctx.drawImage(images['crosshair'].image,player.cursorPos.x - images['crosshair'].image.width / 2,player.cursorPos.y - images['crosshair'].image.height / 2);
+	
+	// Draw tooltip
+	player.tooltip.draw();
 
 
 
