@@ -100,6 +100,10 @@ let images = {
 	'camo1':new Img('camo/walk1.png'),
 
 	'camoTank0':new Img('camoTank/walk0.png'),
+
+	'mortar':new Img('mortar/0.png'),
+
+	'bomb':new Img('mortar/bomb.png'),
 	
 	'bg':new Img('bg.png'),
 	'crosshair':new Img('crosshair.png'),
@@ -130,7 +134,9 @@ class Tower {
 
 	static stats = {
 		size:new Vector2(16,16),
-		cost:0
+		cost:0,
+		name:'',
+		desc:'If you can see this text, Owen fucked up!'
 	}
 
 	constructor() {
@@ -184,7 +190,9 @@ class LandMine extends Tower {
 
 	static stats = {
 		size:new Vector2(8,8),
-		cost:25
+		cost:25,
+		name:'Landmine',
+		desc:'Causes an explosion when stepped on'
 	}
 
 	constructor() {
@@ -289,7 +297,9 @@ class AOE extends Tower {
 
 	static stats = {
 		size:new Vector2(16,32),
-		cost:80
+		cost:80,
+		name:'AOE Tower',
+		desc:'Damages enemies slowly and consistently in a radius'
 	}
 }
 
@@ -335,7 +345,34 @@ class Bunker extends Tower {
 
 	static stats = {
 		size:new Vector2(32,32),
-		cost:150
+		cost:150,
+		name:'Sniper Bunker',
+		desc:'Strikes the closest target with a powerful shot every few seconds'
+	}
+}
+
+class Mortar extends Tower {
+	constructor() {
+		super();
+		this.moveAccordingToSize();
+
+		this.specialUpdates.push(()=>{
+			
+		});
+	}
+
+	static renderSettings = {
+		frames:['bunker0'],
+		timer:0,
+		frame:0,
+		delay:99999 // No real point in putting effort into animating it
+	};
+
+	static stats = {
+		size:new Vector2(32,32),
+		cost:400,
+		name:'Bomb Launcher',
+		desc:'Launches a devastating bomb periodically '
 	}
 }
 
@@ -354,9 +391,6 @@ class Enemy {
 	damage(amount, type) {
 		if (Object.keys(this.stats.resistances).includes(type)) {
 			amount *= this.stats.resistances[type];
-			console.log('Resisted damage down to ' + this.stats.resistances[type] + '%!');
-		} else {
-			console.log('Didn\'t resist shit!');
 		};
 		this.stats.health -= amount;
 	}
@@ -638,12 +672,6 @@ let waves = [
 		'CamoTank':2
 	},{
 		interval:8
-	}),
-
-	new Wave({
-		'Tank':20
-	},{
-		interval:15
 	})
 ];
 
@@ -709,6 +737,7 @@ let player = {
 		draw() {
 			if (this.timer > 0) {
 				this.timer--;
+				ctx.font = '16px monospace';
 				ctx.textBaseline = 'hanging';
 				ctx.textAlign = 'left';
 				ctx.fillStyle = this.color;
@@ -746,6 +775,7 @@ document.addEventListener('wheel',e=>{
 c.addEventListener('mousedown',e=>{
 	// Shoot
 	if (e.button == 0) {
+		if (player.reloadTimer != 0) player.tooltip.set('Reloading','#f55',50);
 		if (player.shotTimer == 0 && player.reloadTimer == 0 && player.bullets > 0) {
 			sounds['pistolShot'].play();
 			player.shotTimer = player.shotCooldown;
@@ -839,14 +869,26 @@ function render() {
 
 	// Draw selected tower in the corner
 	let towerClass = eval(player.buyableTowers[player.selectedTower]);
+
 	let bigImage = images.getImage(towerClass.renderSettings.frames[0]).image;
 	bigImage.width = towerClass.stats.style * 2;
 	bigImage.height = towerClass.stats.style * 2;
 	ctx.webkitImageSmoothingEnabled = false;
 	ctx.mozImageSmoothingEnabled = false;
 	ctx.imageSmoothingEnabled = false;
-	ctx.drawImage(bigImage,c.width - towerClass.stats.size.x * 2 - 10,10,towerClass.stats.size.x * 2, towerClass.stats.size.y * 2);
+	ctx.drawImage(bigImage,c.width - towerClass.stats.size.x * 2 - 10,16 + 32,towerClass.stats.size.x * 2, towerClass.stats.size.y * 2);
 
+	// Draw name and stuff
+	ctx.fillStyle = '#000';
+	ctx.font = '16px monospace';
+	ctx.textAlign = 'right';
+	ctx.textBaseline = 'hanging';
+	ctx.fillText(towerClass.stats.name, c.width - 10, 0);
+	ctx.fillStyle = '#0f0';
+	ctx.fillText(`$${towerClass.stats.cost}`, c.width - 10, 16);
+	ctx.fillStyle = '#000';
+	ctx.fillText(`${towerClass.stats.desc}`, c.width - 10, 32);
+	ctx.textBaseline = 'alphabetic';
 
 	// Draw crosshair
 	ctx.drawImage(images['crosshair'].image,player.cursorPos.x - images['crosshair'].image.width / 2,player.cursorPos.y - images['crosshair'].image.height / 2);
